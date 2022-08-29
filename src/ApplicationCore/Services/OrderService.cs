@@ -5,6 +5,7 @@ using Microsoft.eShopWeb.ApplicationCore.Entities;
 using Microsoft.eShopWeb.ApplicationCore.Entities.BasketAggregate;
 using Microsoft.eShopWeb.ApplicationCore.Entities.OrderAggregate;
 using Microsoft.eShopWeb.ApplicationCore.Interfaces;
+using Microsoft.eShopWeb.ApplicationCore.Services.DTO;
 using Microsoft.eShopWeb.ApplicationCore.Specifications;
 
 namespace Microsoft.eShopWeb.ApplicationCore.Services;
@@ -15,16 +16,19 @@ public class OrderService : IOrderService
     private readonly IUriComposer _uriComposer;
     private readonly IRepository<Basket> _basketRepository;
     private readonly IRepository<CatalogItem> _itemRepository;
+    private readonly IOrderProcessorService _orderItemService;
 
     public OrderService(IRepository<Basket> basketRepository,
         IRepository<CatalogItem> itemRepository,
         IRepository<Order> orderRepository,
-        IUriComposer uriComposer)
+        IUriComposer uriComposer,
+        IOrderProcessorService orderItemService)
     {
         _orderRepository = orderRepository;
         _uriComposer = uriComposer;
         _basketRepository = basketRepository;
         _itemRepository = itemRepository;
+        _orderItemService = orderItemService;
     }
 
     public async Task CreateOrderAsync(int basketId, Address shippingAddress)
@@ -47,7 +51,26 @@ public class OrderService : IOrderService
         }).ToList();
 
         var order = new Order(basket.BuyerId, shippingAddress, items);
-
+               
         await _orderRepository.AddAsync(order);
+
+        var orderItems = items.Select(item =>
+        new ItemDto()
+        {
+            Id = item.Id,
+            Quantity = item.Units
+        }).ToList();
+
+        var address = $"{order.ShipToAddress.ZipCode}, {order.ShipToAddress.Country}, {order.ShipToAddress.State}, {order.ShipToAddress.City}, {order.ShipToAddress.Street}";
+        var orderInfo = new OrderDto()
+        {
+            Id = order.Id,
+            FinalPrice = order.Total(),
+            ShippingAddress = address,
+            Items = orderItems
+        };
+
+        await _orderItemService.ReserveOrderItems(orderItems);
+        await _orderItemService.ProcessOrderDelivery(orderInfo);
     }
 }
