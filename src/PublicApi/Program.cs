@@ -83,6 +83,10 @@ builder.Services.AddCors(options =>
                       });
 });
 
+builder.Services.AddLogging();
+builder.Services.AddApplicationInsightsTelemetry();
+
+
 builder.Services.AddControllers();
 
 builder.Services.AddMediatR(typeof(CatalogItem).Assembly);
